@@ -5,7 +5,8 @@ Window panels
 定义主窗口中的各模块
 '''
 
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
+from data import yysdata
 
 class TaskEditor(QtWidgets.QGroupBox):
     ''' Edit task list 编辑悬赏任务列表 '''
@@ -18,20 +19,24 @@ class TaskEditor(QtWidgets.QGroupBox):
         self.setAlignment(QtCore.Qt.AlignLeft)
         self.setCheckable(False)
 
-        # add task entries
-        addBtn = QtWidgets.QPushButton('添加')
-        delBtn = QtWidgets.QPushButton('移除')
 
-        self.entryWidgetList = []
+        self.taskRowList = []
+        newBtn = QtWidgets.QPushButton('新增任务')
+        # the button group stores all delete buttons so that
+        # I can track them down
+        self.delBtnGroup = QtWidgets.QButtonGroup()
+
+        # set up layout
         self.entryLayout = QtWidgets.QGridLayout()
-        self.entryLayout.setAlignment(QtCore.Qt.AlignTop)
+        self.entryLayout.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignJustify)
+        self.entryLayout.addWidget(newBtn, 0, 0)
+        self.entryLayout.addWidget(QtWidgets.QLabel(''), 0, 1)
+        self.entryLayout.addWidget(QtWidgets.QLabel('怪物'), 0, 2)
+        self.entryLayout.addWidget(QtWidgets.QLabel('数量'), 0, 3)
+        self.entryLayout.addWidget(QtWidgets.QLabel('任务星级'), 0, 4)
 
-        # add entries
-        self.entryLayout.addWidget(QtWidgets.QLabel('怪物'), 0, 1, 1, 2)
-        self.entryLayout.addWidget(QtWidgets.QLabel('数量'), 0, 3, 1, 2)
-        self.entryLayout.addWidget(QtWidgets.QLabel('任务星级'), 0, 5, 1, 2)
-        self.entryLayout.addWidget(addBtn, 1, 0, 1, 1)
-
+        # preset one row
+        self._add_entry()
 
         entryWidgets = QtWidgets.QWidget()
         entryWidgets.setLayout(self.entryLayout)
@@ -41,29 +46,143 @@ class TaskEditor(QtWidgets.QGroupBox):
         entryArea.setWidget(entryWidgets)
 
         # Set up main layout
-        mainLayout = QtWidgets.QVBoxLayout(self)
+        mainLayout = QtWidgets.QVBoxLayout()
         mainLayout.setSpacing(0)
         mainLayout.addWidget(entryArea)
         self.setLayout(mainLayout)
 
-        addBtn.clicked.connect(self.add_entry)
-        delBtn.clicked.connect(self.del_current_entry)
+        newBtn.clicked.connect(self._add_entry)
+        self.delBtnGroup.buttonClicked[int].connect(self._del_entry)
 
-    def add_entry(self):
+    def _add_entry(self):
         '''
         Add a batch entry to the task list
         向悬赏任务列表中添加一个任务
         '''
 
-        pass
+        # get current task number
+        n = len(self.taskRowList)
+        task = TaskRow(self)
+        self.taskRowList.append(task)
+        self.entryLayout.addWidget(task.delBtn, n+1, 0)
+        self.entryLayout.addWidget(task.editBtn, n+1, 1)
+        self.entryLayout.addWidget(task.creepEdit, n+1, 2)
+        self.entryLayout.addWidget(task.numEdit, n+1, 3)
+        self.entryLayout.addWidget(task.starEdit, n+1, 4)
+        self.delBtnGroup.addButton(task.delBtn, n)
 
-    def del_current_entry(self):
+    def _del_entry(self, btn_id):
         '''
-        delete current entry from the task list
-        移除列表中的当前任务
+        delete entry from the task list
+        移除列表中的任务
         '''
 
-        pass
+        task = self.taskRowList[btn_id]
+        self.taskRowList.remove(task)
+        self.delBtnGroup.removeButton(task.delBtn)
+        task.delRow()
+
+    def showTasks(self):
+        ''' Return task list 返回任务列表
+            [(creep_name, creep_num, task_star), ...]
+        '''
+
+        a_list = []
+        for task in self.taskRowList:
+            a_list.append(task.getInput())
+        return a_list
+
+
+class TaskRow(QtWidgets.QWidget):
+    ''' 单行任务模块 '''
+
+    def __init__(self, parent):
+
+        QtWidgets.QWidget.__init__(self, parent)
+        self.parent = parent
+
+        self.creepEdit = QtWidgets.QLineEdit()
+        self.numEdit = QtWidgets.QLineEdit()
+        self.numEdit.setValidator(QtGui.QIntValidator(1, 50))
+        self.starEdit = QtWidgets.QLineEdit()
+        self.starEdit.setValidator(QtGui.QIntValidator(1, 10))
+
+        # set auto completion
+        creepCompleter = QtWidgets.QCompleter(yysdata.CREEP_LIST)
+        self.creepEdit.setCompleter(creepCompleter)
+        self.creepEdit.setPlaceholderText('自动补全')
+
+        self.editBtn = QtWidgets.QPushButton('确定')
+        self.delBtn = QtWidgets.QPushButton('删除')
+        self.editBtn.clicked.connect(self._edit_entry)
+
+    def _edit_entry(self):
+        ''' Edit task entry '''
+
+        # 如果按钮显示的是修改，修改当前任务
+        if self.editBtn.text() == '修改':
+            # 修改样式
+            self.creepEdit.setStyleSheet('color: black')
+            self.numEdit.setStyleSheet('color: black')
+            self.starEdit.setStyleSheet('color: black')
+            # 设为可编辑
+            self.creepEdit.setReadOnly(False)
+            self.numEdit.setReadOnly(False)
+            self.starEdit.setReadOnly(False)
+            # 重置光标位置
+            self.creepEdit.setCursorPosition(0)
+            self.numEdit.setCursorPosition(0)
+            self.starEdit.setCursorPosition(0)
+            # 更改按钮文字
+            self.editBtn.setText('更新')
+        elif self.editBtn.text() in ('更新', '确定'):
+            # 如果按钮显示的是输入/更新，更新当前任务：设为只读
+            # 修改样式
+            self.creepEdit.setStyleSheet('background-color: #F0F0F0')
+            self.numEdit.setStyleSheet('background-color: #F0F0F0')
+            self.starEdit.setStyleSheet('background-color: #F0F0F0')
+            # 设为只读
+            self.creepEdit.setReadOnly(True)
+            self.numEdit.setReadOnly(True)
+            self.starEdit.setReadOnly(True)
+            # 重置光标位置
+            self.creepEdit.setCursorPosition(0)
+            self.numEdit.setCursorPosition(0)
+            self.starEdit.setCursorPosition(0)
+            # 更改按钮文字
+            self.editBtn.setText('修改')
+
+    def delRow(self):
+        ''' Delete current task entry '''
+
+        self.creepEdit.clear()
+        self.numEdit.clear()
+        self.starEdit.clear()
+        self.creepEdit.deleteLater()
+        self.numEdit.deleteLater()
+        self.starEdit.deleteLater()
+        self.editBtn.deleteLater()
+        self.delBtn.deleteLater()
+
+    def getInput(self):
+        ''' Retrieve input from widgets.
+        Returns:
+            (creep_name, creep_num, task_star)
+        '''
+
+        creep_name = self.creepEdit.text()
+        creep_num = self.numEdit.text()
+        task_star = self.starEdit.text()
+
+        # if all 3 slots have valid inputs
+        if creep_name and creep_num and task_star:
+            # make sure creep name is input correctly
+            if creep_name in yysdata.CREEP_LIST:
+                return (creep_name, int(creep_num), int(task_star))
+            else:
+                return False
+        else:
+            return False
 
 
 class BanEditor(QtWidgets.QGroupBox):
@@ -77,63 +196,168 @@ class BanEditor(QtWidgets.QGroupBox):
         self.setAlignment(QtCore.Qt.AlignLeft)
         self.setCheckable(False)
 
+        self.isBoss = False
+        self.isTeam = False
+        self.yhMinLevel = 1
+        self.yhMaxLevel = 10
+        self.mwMinLevel = 1
+        self.mwMaxLevel = 10
 
-        # 单选器
+        # 加载上次关闭程序时的设定
+        with open('data/yyspreset.dat', 'r') as f:
+            for l in f:
+                info = l.split()
+                if info[0] == 'isBoss':
+                    self.isBoss = bool(int(info[1]))
+                elif info[0] == 'isTeam':
+                    self.isTeam = bool(int(info[1]))
+                elif info[0] == 'yhLevel':
+                    self.yhMinLevel = int(info[1])
+                    self.yhMaxLevel = int(info[2])
+                elif info[0] == 'mwLevel':
+                    self.mwMinLevel = int(info[1])
+                    self.mwMaxLevel = int(info[2])
+                else:
+                    pass
 
-        self.selBoss = BanIfSelector('探索副本', '首领')      # 探索副本是否选择打首领
-        self.selGroup = BanIfSelector('御魂副本', '组队')     # 御魂副本是否选择组队
-        self.selTaskStar = BanIfSelector('任务星级', '高星优先')  # 是否优先考虑高星级任务
+        self.bossSel = QtWidgets.QCheckBox('允许攻打探索副本首领')
+        self.bossSel.setCheckState(self.isBoss)
+        self.teamSel = QtWidgets.QCheckBox('可以组队')
+        self.teamSel.setCheckState(self.isTeam)
+        self.bossSel.setMaximumWidth(240)
+        self.teamSel.setMaximumWidth(240)
+        yhLabel = QtWidgets.QLabel('≤ 御魂副本层数 ≤')
+        mwLabel = QtWidgets.QLabel('≤ 秘闻副本层数 ≤')
+        yhLabel.setMaximumWidth(140)
+        mwLabel.setMaximumWidth(140)
+        self.yhMinLevelEdit = QtWidgets.QLineEdit(str(self.yhMinLevel))
+        self.yhMaxLevelEdit = QtWidgets.QLineEdit(str(self.yhMaxLevel))
+        self.yhMinLevelEdit.setValidator(QtGui.QIntValidator(0, 10))
+        self.yhMaxLevelEdit.setValidator(QtGui.QIntValidator(0, 10))
+        self.mwMinLevelEdit = QtWidgets.QLineEdit(str(self.mwMinLevel))
+        self.mwMaxLevelEdit = QtWidgets.QLineEdit(str(self.mwMaxLevel))
+        self.mwMinLevelEdit.setValidator(QtGui.QIntValidator(0, 10))
+        self.mwMaxLevelEdit.setValidator(QtGui.QIntValidator(0, 10))
+        self.yhMinLevelEdit.setMaximumWidth(35)
+        self.yhMaxLevelEdit.setMaximumWidth(35)
+        self.mwMinLevelEdit.setMaximumWidth(35)
+        self.mwMaxLevelEdit.setMaximumWidth(35)
 
-        # 其他副本层数
-        self.yuhunLevel = BanLevelSelector()    # 御魂副本
-        self.miwenLevel = BanLevelSelector()    # 秘闻副本
-        selLevel = QtWidgets.QWidget()
-        selLevelLayout = QtWidgets.QGridLayout()
-        selLevelLayout.setAlignment(QtCore.Qt.AlignTop)
-        selLevelLayout.addWidget(QtWidgets.QLabel('副本层数'), 0, 0)
-        selLevelLayout.addWidget(QtWidgets.QLabel('御魂副本'), 1, 0)
-        selLevelLayout.addWidget(QtWidgets.QLabel('秘闻副本'), 2, 0)
-        for i in range(10):
-            selLevelLayout.addWidget(QtWidgets.QLabel(str(i+1)), 0, i+1)
-            selLevelLayout.addWidget(self.yuhunLevel.level[i], 1, i+1)
-            selLevelLayout.addWidget(self.miwenLevel.level[i], 2, i+1)
-        selLevel.setLayout(selLevelLayout)
+        mainLayout = QtWidgets.QGridLayout()
+        mainLayout.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+        mainLayout.addWidget(self.bossSel, 0, 0)
+        mainLayout.addWidget(self.teamSel, 1, 0)
+        mainLayout.addWidget(yhLabel, 0, 2)
+        mainLayout.addWidget(self.yhMinLevelEdit, 0, 1)
+        mainLayout.addWidget(self.yhMaxLevelEdit, 0, 3)
+        mainLayout.addWidget(mwLabel, 1, 2)
+        mainLayout.addWidget(self.mwMinLevelEdit, 1, 1)
+        mainLayout.addWidget(self.mwMaxLevelEdit, 1, 3)
+        self.setLayout(mainLayout)
+
+    def banOpts(self):
+        ''' Return ban options {'option-name': value} '''
+
+        self._refresh()
+        a_dict = {}
+        a_dict['isBoss'] = self.isBoss
+        a_dict['isTeam'] = self.isTeam
+        a_dict['yhLevel'] = (self.yhMinLevel, self.yhMaxLevel)
+        a_dict['mwLevel'] = (self.mwMinLevel, self.mwMaxLevel)
+
+        return a_dict
+
+    def _refresh(self):
+        ''' Refresh ban options '''
+
+        self.isBoss = self.bossSel.isChecked()
+        self.isTeam = self.teamSel.isChecked()
+        self.yhMinLevel = int(self.yhMinLevelEdit.text())
+        self.yhMaxLevel = int(self.yhMaxLevelEdit.text())
+        self.mwMinLevel = int(self.mwMinLevelEdit.text())
+        self.mwMaxLevel = int(self.mwMaxLevelEdit.text())
+
+
+class MsgWarning(QtWidgets.QMessageBox):
+    ''' Warning message box '''
+
+    def __init__(self, parent, title_text, moretext=''):
+        QtWidgets.QWidget.__init__(self, parent)
+
+        self.setIcon(QtWidgets.QMessageBox.Warning)
+        self.addButton(QtWidgets.QMessageBox.Ok)
+        self.setWindowTitle(title_text)
+        self.setText(moretext)
+
+
+class MsgResult(QtWidgets.QDialog):
+    ''' Result message box '''
+
+    def __init__(self, parent, full_res):
+        ''' Arguments: full_res -- {task_star: (status, solution, total_s)}
+            status -- pulp status: 'Optimal', 'Unbound', 'Unsolvable'
+            solution -- {'level_name': level_num}
+            total_s -- total stamina, int
+        '''
+
+        QtWidgets.QDialog.__init__(self, parent)
+
+        self.setMinimumWidth(400)
+        self.setMinimumHeight(400)
+        self.setWindowTitle('结果')
+        self.resize(QtCore.QSize(600, 600))
+        self.setWindowIcon(QtGui.QIcon('logo.jpg'))
+
+        msgWidget = QtWidgets.QWidget()
+        self.msgLayout = QtWidgets.QVBoxLayout()
+        self.msgLayout.setAlignment(QtCore.Qt.AlignTop)
+        self._add_widget(full_res)
+        msgWidget.setLayout(self.msgLayout)
+
+        msgArea = QtWidgets.QScrollArea()
+        msgArea.setWidgetResizable(True)
+        msgArea.setWidget(msgWidget)
 
         mainLayout = QtWidgets.QVBoxLayout()
         mainLayout.setAlignment(QtCore.Qt.AlignTop)
-        mainLayout.addWidget(self.selBoss)
-        mainLayout.addWidget(self.selGroup)
-        mainLayout.addWidget(self.selTaskStar)
-        mainLayout.addWidget(selLevel)
+        mainLayout.addWidget(msgArea)
         self.setLayout(mainLayout)
 
+    def _add_widget(self, full_res):
+        ''' add result widgets '''
 
-class BanIfSelector(QtWidgets.QWidget):
-    ''' 任务限制条件单选器 '''
+        for key in full_res.keys():
+            status, solution, total_s = full_res[key]
+            if status == -1 or not(bool(solution)):
+                title = '无法完成 ≥{:d} 星的所有任务'.format(key)
+                msg = ['当前限制条件下无法完成悬赏任务。请调整限制条件，如允许攻打首领或更多副本层数。']
+            elif status == 1:
+                title = '完成 ≥{:d} 星任务的推荐策略'.format(key)
+                msg = []
+                for item in solution.items():
+                    msg.append('{:s} × {:.0f} 次'.format(*item))
+                msg.append('总消耗体力：{:.0f}'.format(total_s))
+            else:
+                pass
+            self.msgLayout.addWidget(MsgResultEntry(title, msg))
 
-    def __init__(self, str1, str2):
+
+class MsgResultEntry(QtWidgets.QGroupBox):
+    ''' 单个结果条目 '''
+
+    def __init__(self, title, msg):
         QtWidgets.QWidget.__init__(self)
 
-        selLayout = QtWidgets.QHBoxLayout()
-        selLayout.addWidget(QtWidgets.QLabel(str1))
-        self.ifBtn = QtWidgets.QCheckBox(str2)
-        self.ifBtn.setCheckState(False)
-        selLayout.addWidget(self.ifBtn)
-        self.setLayout(selLayout)
+        self.setTitle(title)
+        self.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+        self.setCheckable(False)
 
+        mainLayout = QtWidgets.QVBoxLayout()
 
-class BanLevelSelector(QtWidgets.QButtonGroup):
-    ''' 副本层数选择器 '''
+        for a_line in msg:
+            l = QtWidgets.QLabel(a_line)
+            l.setWordWrap(True)
+            l.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+            mainLayout.addWidget(l)
 
-    def __init__(self):
-        QtWidgets.QWidget.__init__(self)
-
-        self.setExclusive(False)
-
-        self.level = []
-
-        for i in range(10):
-            _l = QtWidgets.QCheckBox('')
-            _l.setChecked(True)
-            self.level.append(_l)
-            self.addButton(_l)
+        self.setLayout(mainLayout)
