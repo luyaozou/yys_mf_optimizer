@@ -196,21 +196,18 @@ class BanEditor(QtWidgets.QGroupBox):
         self.setAlignment(QtCore.Qt.AlignLeft)
         self.setCheckable(False)
 
-        self.isBoss = False
-        self.isTeam = False
-        self.yhMinLevel = 1
-        self.yhMaxLevel = 10
-        self.mwMinLevel = 1
-        self.mwMaxLevel = 10
-
         # 加载上次关闭程序时的设定
         with open('data/yyspreset.dat', 'r') as f:
             for l in f:
                 info = l.split()
                 if info[0] == 'isBoss':
-                    self.isBoss = bool(int(info[1]))
+                    self.isBoss = int(info[1])
                 elif info[0] == 'isTeam':
-                    self.isTeam = bool(int(info[1]))
+                    self.isTeam = int(info[1])
+                elif info[0] == 'isYH':
+                    self.isYH = int(info[1])
+                elif info[0] == 'isMW':
+                    self.isMW = int(info[1])
                 elif info[0] == 'yhLevel':
                     self.yhMinLevel = int(info[1])
                     self.yhMaxLevel = int(info[2])
@@ -220,39 +217,65 @@ class BanEditor(QtWidgets.QGroupBox):
                 else:
                     pass
 
+        # initialize widgets
         self.bossSel = QtWidgets.QCheckBox('允许攻打探索副本首领')
+        self.bossSel.setTristate(False)
         self.bossSel.setCheckState(self.isBoss)
         self.teamSel = QtWidgets.QCheckBox('可以组队')
+        self.teamSel.setTristate(False)
         self.teamSel.setCheckState(self.isTeam)
         self.bossSel.setMaximumWidth(240)
         self.teamSel.setMaximumWidth(240)
+        self.yhSel = QtWidgets.QCheckBox('攻打御魂副本')
+        self.yhSel.setTristate(False)
+        self.yhSel.setCheckState(self.isYH)
+        self.mwSel = QtWidgets.QCheckBox('攻打秘闻副本')
+        self.mwSel.setTristate(False)
+        self.mwSel.setCheckState(self.isMW)
+        self.yhSel.setMaximumWidth(200)
+        self.mwSel.setMaximumWidth(200)
         yhLabel = QtWidgets.QLabel('≤ 御魂副本层数 ≤')
         mwLabel = QtWidgets.QLabel('≤ 秘闻副本层数 ≤')
         yhLabel.setMaximumWidth(140)
         mwLabel.setMaximumWidth(140)
         self.yhMinLevelEdit = QtWidgets.QLineEdit(str(self.yhMinLevel))
         self.yhMaxLevelEdit = QtWidgets.QLineEdit(str(self.yhMaxLevel))
-        self.yhMinLevelEdit.setValidator(QtGui.QIntValidator(0, 10))
-        self.yhMaxLevelEdit.setValidator(QtGui.QIntValidator(0, 10))
+        self.yhMinLevelEdit.setValidator(QtGui.QIntValidator(1, 10))
+        self.yhMaxLevelEdit.setValidator(QtGui.QIntValidator(1, 10))
         self.mwMinLevelEdit = QtWidgets.QLineEdit(str(self.mwMinLevel))
         self.mwMaxLevelEdit = QtWidgets.QLineEdit(str(self.mwMaxLevel))
-        self.mwMinLevelEdit.setValidator(QtGui.QIntValidator(0, 10))
-        self.mwMaxLevelEdit.setValidator(QtGui.QIntValidator(0, 10))
+        self.mwMinLevelEdit.setValidator(QtGui.QIntValidator(1, 10))
+        self.mwMaxLevelEdit.setValidator(QtGui.QIntValidator(1, 10))
         self.yhMinLevelEdit.setMaximumWidth(35)
         self.yhMaxLevelEdit.setMaximumWidth(35)
         self.mwMinLevelEdit.setMaximumWidth(35)
         self.mwMaxLevelEdit.setMaximumWidth(35)
+        # initialize edit box style
+        self._yh_state(self.yhSel.checkState())
+        self._mw_state(self.mwSel.checkState())
+        # dynamically reassign validator
+        self.yhMinLevelEdit.editingFinished.connect(self._reval_yhmax)
+        self.yhMaxLevelEdit.editingFinished.connect(self._reval_yhmin)
+        self.mwMinLevelEdit.editingFinished.connect(self._reval_mwmax)
+        self.mwMaxLevelEdit.editingFinished.connect(self._reval_mwmin)
+        # dynamically set edit box style
+        self.yhSel.stateChanged.connect(self._yh_state)
+        self.mwSel.stateChanged.connect(self._mw_state)
+        self.yhSel.stateChanged.connect(self._refresh)
+        self.mwSel.stateChanged.connect(self._refresh)
 
         mainLayout = QtWidgets.QGridLayout()
         mainLayout.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
         mainLayout.addWidget(self.bossSel, 0, 0)
         mainLayout.addWidget(self.teamSel, 1, 0)
-        mainLayout.addWidget(yhLabel, 0, 2)
-        mainLayout.addWidget(self.yhMinLevelEdit, 0, 1)
-        mainLayout.addWidget(self.yhMaxLevelEdit, 0, 3)
-        mainLayout.addWidget(mwLabel, 1, 2)
-        mainLayout.addWidget(self.mwMinLevelEdit, 1, 1)
-        mainLayout.addWidget(self.mwMaxLevelEdit, 1, 3)
+        mainLayout.addWidget(self.yhSel, 0, 1)
+        mainLayout.addWidget(yhLabel, 0, 3)
+        mainLayout.addWidget(self.yhMinLevelEdit, 0, 2)
+        mainLayout.addWidget(self.yhMaxLevelEdit, 0, 4)
+        mainLayout.addWidget(self.mwSel, 1, 1)
+        mainLayout.addWidget(mwLabel, 1, 3)
+        mainLayout.addWidget(self.mwMinLevelEdit, 1, 2)
+        mainLayout.addWidget(self.mwMaxLevelEdit, 1, 4)
         self.setLayout(mainLayout)
 
     def banOpts(self):
@@ -270,12 +293,72 @@ class BanEditor(QtWidgets.QGroupBox):
     def _refresh(self):
         ''' Refresh ban options '''
 
-        self.isBoss = self.bossSel.isChecked()
-        self.isTeam = self.teamSel.isChecked()
-        self.yhMinLevel = int(self.yhMinLevelEdit.text())
-        self.yhMaxLevel = int(self.yhMaxLevelEdit.text())
-        self.mwMinLevel = int(self.mwMinLevelEdit.text())
-        self.mwMaxLevel = int(self.mwMaxLevelEdit.text())
+        self.isBoss = self.bossSel.checkState()
+        self.isTeam = self.teamSel.checkState()
+        self.isYH = self.yhSel.checkState()
+        self.isMW = self.mwSel.checkState()
+        if self.yhSel.checkState() == QtCore.Qt.Checked:
+            self.yhMinLevel = int(self.yhMinLevelEdit.text())
+            self.yhMaxLevel = int(self.yhMaxLevelEdit.text())
+        else:   # make both 0 will disable yh levels in the calculation
+            self.yhMinLevel = 0
+            self.yhMaxLevel = 0
+        if self.mwSel.checkState() == QtCore.Qt.Checked:
+            self.mwMinLevel = int(self.mwMinLevelEdit.text())
+            self.mwMaxLevel = int(self.mwMaxLevelEdit.text())
+        else:   # make both 0 will disable mw levels in the calculation
+            self.mwMinLevel = 0
+            self.mwMaxLevel = 0
+
+    def _yh_state(self, state):
+        ''' Adjust yh widget state '''
+        if state:
+            self.yhMinLevelEdit.setReadOnly(False)
+            self.yhMaxLevelEdit.setReadOnly(False)
+            self.yhMinLevelEdit.setStyleSheet('color: black')
+            self.yhMaxLevelEdit.setStyleSheet('color: black')
+            if self.yhMinLevelEdit.text() == '0':
+                self.yhMinLevelEdit.setText('1')
+            if self.yhMaxLevelEdit.text() == '0':
+                self.yhMaxLevelEdit.setText('10')
+        else:
+            self.yhMinLevelEdit.setReadOnly(True)
+            self.yhMaxLevelEdit.setReadOnly(True)
+            self.yhMinLevelEdit.setStyleSheet('background-color: #F0F0F0')
+            self.yhMaxLevelEdit.setStyleSheet('background-color: #F0F0F0')
+
+    def _mw_state(self, state):
+        ''' Adjust mw widget state '''
+        if state:
+            self.mwMinLevelEdit.setReadOnly(False)
+            self.mwMaxLevelEdit.setReadOnly(False)
+            self.mwMinLevelEdit.setStyleSheet('color: black')
+            self.mwMaxLevelEdit.setStyleSheet('color: black')
+            if self.mwMinLevelEdit.text() == '0':
+                self.mwMinLevelEdit.setText('1')
+            if self.mwMaxLevelEdit.text() == '0':
+                self.mwMaxLevelEdit.setText('10')
+        else:
+            self.mwMinLevelEdit.setReadOnly(True)
+            self.mwMaxLevelEdit.setReadOnly(True)
+            self.mwMinLevelEdit.setStyleSheet('background-color: #F0F0F0')
+            self.mwMaxLevelEdit.setStyleSheet('background-color: #F0F0F0')
+
+    def _reval_yhmin(self):
+        ''' Reset validator for yhmin '''
+        self.yhMinLevelEdit.setValidator(QtGui.QIntValidator(1, int(self.yhMaxLevelEdit.text())))
+
+    def _reval_yhmax(self):
+        ''' Reset validator for yhmax '''
+        self.yhMaxLevelEdit.setValidator(QtGui.QIntValidator(int(self.yhMinLevelEdit.text()), 10))
+
+    def _reval_mwmin(self):
+        ''' Reset validator for mwmin '''
+        self.mwMinLevelEdit.setValidator(QtGui.QIntValidator(1, int(self.mwMaxLevelEdit.text())))
+
+    def _reval_mwmax(self):
+        ''' Reset validator for mwmax '''
+        self.mwMaxLevelEdit.setValidator(QtGui.QIntValidator(int(self.mwMinLevelEdit.text()), 10))
 
 
 class MsgWarning(QtWidgets.QMessageBox):
@@ -352,12 +435,58 @@ class MsgResultEntry(QtWidgets.QGroupBox):
         self.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
         self.setCheckable(False)
 
-        mainLayout = QtWidgets.QVBoxLayout()
-
-        for a_line in msg:
-            l = QtWidgets.QLabel(a_line)
+        # check if task solvable. (non-solvable prob returns only one line)
+        if len(msg) == 1:
+            mainLayout = QtWidgets.QVBoxLayout()
+            l.QtWidgets.QLabel(msg[0])
             l.setWordWrap(True)
             l.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
             mainLayout.addWidget(l)
+        else:
+            mainLayout = QtWidgets.QGridLayout()
+            for i in range(len(msg)-1):
+                l = QtWidgets.QLabel(msg[i])
+                l.setWordWrap(True)
+                l.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+                c = Counter()
+                mainLayout.addWidget(l, i, 0)
+                mainLayout.addWidget(c, i, 1)
+            l = QtWidgets.QLabel(msg[-1])
+            l.setWordWrap(True)
+            l.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+            mainLayout.addWidget(l, len(msg), 0)
 
         self.setLayout(mainLayout)
+
+
+class Counter(QtWidgets.QWidget):
+    ''' 计数器 '''
+
+    def __init__(self):
+        QtWidgets.QWidget.__init__(self)
+
+        self.numLabel = QtWidgets.QLineEdit('0')
+        self.numLabel.setReadOnly(True)
+        self.numLabel.setAlignment(QtCore.Qt.AlignHCenter)
+        self.plusBtn = QtWidgets.QPushButton('+')
+        self.minusBtn = QtWidgets.QPushButton('-')
+        self.plusBtn.clicked.connect(self._plus)
+        self.minusBtn.clicked.connect(self._minus)
+        self.numLabel.setMaximumWidth(50)
+        self.plusBtn.setMaximumWidth(30)
+        self.minusBtn.setMaximumWidth(30)
+
+        mainLayout = QtWidgets.QHBoxLayout()
+        mainLayout.addWidget(self.numLabel)
+        mainLayout.addWidget(self.plusBtn)
+        mainLayout.addWidget(self.minusBtn)
+        self.setLayout(mainLayout)
+        self.setMaximumWidth(120)
+
+    def _plus(self):
+        n = int(self.numLabel.text())
+        self.numLabel.setText(str(n+1))
+
+    def _minus(self):
+        n = int(self.numLabel.text())
+        self.numLabel.setText(str(n-1))

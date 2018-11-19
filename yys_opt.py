@@ -96,6 +96,8 @@ class MainWindow(QtWidgets.QMainWindow):
         with open('data/yyspreset.dat', 'w') as f:
             f.write('isBoss {:d}\n'.format(self.banEditor.isBoss))
             f.write('isTeam {:d}\n'.format(self.banEditor.isTeam))
+            f.write('isYH {:d}\n'.format(self.banEditor.isYH))
+            f.write('isMW {:d}\n'.format(self.banEditor.isMW))
             f.write('yhLevel {:d} {:d}\n'.format(self.banEditor.yhMinLevel, self.banEditor.yhMaxLevel))
             f.write('mwLevel {:d} {:d}\n'.format(self.banEditor.mwMinLevel, self.banEditor.mwMaxLevel))
 
