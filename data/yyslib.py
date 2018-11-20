@@ -269,56 +269,63 @@ def lp_opt(c, creep_num, level_id, isTeam=False, add_constraint=None):
 
     stamina = gen_stamina([yysdata.LEVEL_NAME_LIST[i] for i in level_id], isTeam)
 
+    # append stamina to the first row of constraint matrix c
+    c = np.vstack((stamina, c))
+
     if add_constraint:
         x = []
         for i in level_id:
             if i in add_constraint:
-                x.append(pulp.LpVariable(yysdata.LEVEL_NAME_LIST[i], lowBound=1, cat=pulp.LpInteger))
+                x.append(pulp.LpVariable('x{:d}'.format(i), lowBound=1, cat=pulp.LpInteger))
             else:
-                x.append(pulp.LpVariable(yysdata.LEVEL_NAME_LIST[i], lowBound=0, cat=pulp.LpInteger))
+                x.append(pulp.LpVariable('x{:d}'.format(i), lowBound=0, cat=pulp.LpInteger))
     else:
-        x = [pulp.LpVariable(yysdata.LEVEL_NAME_LIST[i], lowBound=0, cat=pulp.LpInteger) for i in level_id]
+        x = [pulp.LpVariable('x{:d}'.format(i), lowBound=0, cat=pulp.LpInteger) for i in level_id]
 
-    obj = pulp.LpAffineExpression([(x[i], stamina[i]) for i in range(len(level_id))])
+    obj = pulp.LpAffineExpression([(x[j], c[0, j]) for j in range(len(level_id))])
     # objective funciton
     prob += pulp.lpSum(obj)
     # normal constraints
-    if len(c.shape) == 1:   # 1D problem
-        _t = pulp.LpAffineExpression([(x[j], c[j]) for j in range(len(stamina))])
-        prob += pulp.lpSum(_t) >= creep_num[0]
-    else:
-        for i in range(len(creep_num)):
-            _t = pulp.LpAffineExpression([(x[j], c[i, j]) for j in range(len(stamina))])
-            prob += pulp.lpSum(_t) >= creep_num[i]
+    for i in range(len(creep_num)):
+        _t = pulp.LpAffineExpression([(x[j], c[i+1, j]) for j in range(len(level_id))])
+        prob += pulp.lpSum(_t) >= creep_num[i]
     prob.solve()
 
     solution = []
-    total_s = 0
-    res = prob.variables()
+    # and this is ABSOLUTELY stupid: believe it or not,
+    # the index [i] pulp returns is not equal to the
+    # index j of x[level_id] in level_id!
+    # pulp shuffles the list!!!
+    # therefore, I've gotta get level id from x.name,
+    # and store the varValue as well with the right id
+    # Let's do it
+    x0 = np.zeros(len(level_id))
+    for x in prob.variables():
+        if x.varValue:  # if non-zero
+            j = level_id.index(int(x.name[1:]))
+            x0[j] = x.varValue
+        else:
+            pass
 
     # find identical levels and return all of them in the result
     identical_cols = {}
-
-    for j in range(len(res)):
-        x = res[j]
-        if x.varValue:
-            cj = c[j] if len(c.shape) == 1 else c[:, j]
-            identical_cols[j] = []
-            for k in range(len(res)):
-                ck = c[:, k]
-                if k != j and stamina[j] == stamina[k] and np.array_equal(cj, ck):
-                    identical_cols[j].append(k)
-                else:
-                    pass
-        else:
-            pass
+    for j in np.nonzero(x0)[0].tolist():    # get col id of nonzero x
+        cj = c[:, j]
+        identical_cols[j] = []
+        for k in range(len(x0)):    # find identical cols
+            ck = c[:, k]
+            if k != j and np.array_equal(cj, ck):
+                identical_cols[j].append(k)
+            else:
+                pass
     for j, ks in identical_cols.items():
         if ks:
-            level_names = [res[j].name] + [res[k].name for k in ks]
+            level_names = [yysdata.LEVEL_NAME_LIST[level_id[j]]] + \
+                          [yysdata.LEVEL_NAME_LIST[level_id[k]] for k in ks]
         else:
-            level_names = [res[j].name]
-        solution.append((level_names, res[j].varValue))
-        total_s += stamina[j] * res[j].varValue
+            level_names = [yysdata.LEVEL_NAME_LIST[level_id[j]]]
+        solution.append((level_names, x0[j]))
+    total_s = np.dot(x0, c[0, :].transpose())
 
     return prob.status, solution, total_s
 
