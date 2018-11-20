@@ -396,7 +396,7 @@ class MsgResult(QtWidgets.QDialog):
 
         QtWidgets.QDialog.__init__(self, parent)
 
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(500)
         self.setMinimumHeight(400)
         self.setWindowTitle('结果')
         self.resize(QtCore.QSize(600, 600))
@@ -425,21 +425,30 @@ class MsgResult(QtWidgets.QDialog):
             if status == -1 or not(bool(solution)):
                 title = '无法完成 ≥{:d} 星的所有任务'.format(key)
                 msg = ['当前限制条件下无法完成悬赏任务。请调整限制条件，如允许攻打首领或更多副本层数。']
+                self.msgLayout.addWidget(MsgResultEntry(title, msg))
             elif status == 1:
                 title = '完成 ≥{:d} 星任务的推荐策略'.format(key)
                 msg = []
-                for item in solution.items():
-                    msg.append('{:s} × {:.0f} 次'.format(*item))
+                n = []
+                for item in solution:
+                    # ([<'level_name'>, ], <value, float>)
+                    names, value = item
+                    names.reverse()
+                    s = '    ' + names.pop()
+                    while names:
+                        s += '\n或 {:s}'.format(names.pop())
+                    msg.append(s)
+                    n.append(value)
                 msg.append('总消耗体力：{:.0f}'.format(total_s))
+                self.msgLayout.addWidget(MsgResultEntry(title, msg, n))
             else:
                 pass
-            self.msgLayout.addWidget(MsgResultEntry(title, msg))
 
 
 class MsgResultEntry(QtWidgets.QGroupBox):
     ''' 单个结果条目 '''
 
-    def __init__(self, title, msg):
+    def __init__(self, title, msg, n=[]):
         QtWidgets.QWidget.__init__(self)
 
         self.setTitle(title)
@@ -449,23 +458,27 @@ class MsgResultEntry(QtWidgets.QGroupBox):
         # check if task solvable. (non-solvable prob returns only one line)
         if len(msg) == 1:
             mainLayout = QtWidgets.QVBoxLayout()
-            l = QtWidgets.QLabel(msg[0])
-            l.setWordWrap(True)
-            l.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
-            mainLayout.addWidget(l)
+            _p = QtWidgets.QLabel(msg[0])
+            _p.setWordWrap(True)
+            _p.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+            mainLayout.addWidget(_p)
         else:
             mainLayout = QtWidgets.QGridLayout()
             for i in range(len(msg)-1):
-                l = QtWidgets.QLabel(msg[i])
-                l.setWordWrap(True)
-                l.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
-                c = Counter()
-                mainLayout.addWidget(l, i, 0)
-                mainLayout.addWidget(c, i, 1)
-            l = QtWidgets.QLabel(msg[-1])
-            l.setWordWrap(True)
-            l.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
-            mainLayout.addWidget(l, len(msg), 0)
+                _p = QtWidgets.QLabel(msg[i])
+                _p.setWordWrap(False)
+                _p.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+                _q = QtWidgets.QLabel(' × {:.0f} 次'.format(n[i]))
+                _q.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight)
+                _q.setMaximumWidth(200)
+                _c = Counter()
+                mainLayout.addWidget(_p, i, 0)
+                mainLayout.addWidget(_q, i, 1)
+                mainLayout.addWidget(_c, i, 2)
+            _p = QtWidgets.QLabel(msg[-1])
+            _p.setWordWrap(True)
+            _p.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+            mainLayout.addWidget(_p, len(msg), 0)
 
         self.setLayout(mainLayout)
 

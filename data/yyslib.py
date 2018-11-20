@@ -261,7 +261,7 @@ def lp_opt(c, creep_num, level_id, isTeam=False, add_constraint=None):
         add_constraint -- additional constraint from boss level
     Returns:
         prob.status -- pulp status
-        solution -- {<'level_name'>: <level_num, float>}
+        solution -- [([<'level_name'>, ...], <level_num, float>), ...]
         total_s -- total stamina, float
     '''
 
@@ -283,19 +283,42 @@ def lp_opt(c, creep_num, level_id, isTeam=False, add_constraint=None):
     # objective funciton
     prob += pulp.lpSum(obj)
     # normal constraints
-    for i in range(len(creep_num)):
-        prob += sum(x[j] * c[i][j] for j in range(len(stamina))) >= creep_num[i]
+    if len(c.shape) == 1:   # 1D problem
+        _t = pulp.LpAffineExpression([(x[j], c[j]) for j in range(len(stamina))])
+        prob += pulp.lpSum(_t) >= creep_num[0]
+    else:
+        for i in range(len(creep_num)):
+            _t = pulp.LpAffineExpression([(x[j], c[i, j]) for j in range(len(stamina))])
+            prob += pulp.lpSum(_t) >= creep_num[i]
     prob.solve()
 
-    solution = {}
+    solution = []
     total_s = 0
     res = prob.variables()
-    for x in res:
+
+    # find identical levels and return all of them in the result
+    identical_cols = {}
+
+    for j in range(len(res)):
+        x = res[j]
         if x.varValue:
-            solution[x.name] = x.varValue
-            total_s += stamina[res.index(x)] * x.varValue
+            cj = c[j] if len(c.shape) == 1 else c[:, j]
+            identical_cols[j] = []
+            for k in range(len(res)):
+                ck = c[:, k]
+                if k != j and stamina[j] == stamina[k] and np.array_equal(cj, ck):
+                    identical_cols[j].append(k)
+                else:
+                    pass
         else:
             pass
+    for j, ks in identical_cols.items():
+        if ks:
+            level_names = [res[j].name] + [res[k].name for k in ks]
+        else:
+            level_names = [res[j].name]
+        solution.append((level_names, res[j].varValue))
+        total_s += stamina[j] * res[j].varValue
 
     return prob.status, solution, total_s
 
