@@ -7,6 +7,7 @@ Window panels
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 from data import yysdata
+from os import path
 
 class TaskEditor(QtWidgets.QGroupBox):
     ''' Edit task list 编辑悬赏任务列表 '''
@@ -196,26 +197,36 @@ class BanEditor(QtWidgets.QGroupBox):
         self.setAlignment(QtCore.Qt.AlignLeft)
         self.setCheckable(False)
 
-        # 加载上次关闭程序时的设定
-        with open('data/yyspreset.dat', 'r') as f:
-            for l in f:
-                info = l.split()
-                if info[0] == 'isBoss':
-                    self.isBoss = int(info[1])
-                elif info[0] == 'isTeam':
-                    self.isTeam = int(info[1])
-                elif info[0] == 'isYH':
-                    self.isYH = int(info[1])
-                elif info[0] == 'isMW':
-                    self.isMW = int(info[1])
-                elif info[0] == 'yhLevel':
-                    self.yhMinLevel = int(info[1])
-                    self.yhMaxLevel = int(info[2])
-                elif info[0] == 'mwLevel':
-                    self.mwMinLevel = int(info[1])
-                    self.mwMaxLevel = int(info[2])
-                else:
-                    pass
+        # 如果有设定文件，加载上次关闭程序时的设定。否则初始化默认值
+        if path.isfile('data/yyspreset.dat'):
+            with open('data/yyspreset.dat', 'r') as f:
+                for l in f:
+                    info = l.split()
+                    if info[0] == 'isBoss':
+                        self.isBoss = int(info[1])
+                    elif info[0] == 'isTeam':
+                        self.isTeam = int(info[1])
+                    elif info[0] == 'isYH':
+                        self.isYH = int(info[1])
+                    elif info[0] == 'isMW':
+                        self.isMW = int(info[1])
+                    elif info[0] == 'yhLevel':
+                        self.yhMinLevel = int(info[1])
+                        self.yhMaxLevel = int(info[2])
+                    elif info[0] == 'mwLevel':
+                        self.mwMinLevel = int(info[1])
+                        self.mwMaxLevel = int(info[2])
+                    else:
+                        pass
+        else:
+            self.isBoss = 0
+            self.isTeam = 0
+            self.isYH = 0
+            self.isMW = 0
+            self.yhMinLevel = 0
+            self.yhMaxLevel = 0
+            self.mwMinLevel = 0
+            self.mwMaxLevel = 0
 
         # initialize widgets
         self.bossSel = QtWidgets.QCheckBox('允许攻打探索副本首领')
@@ -438,7 +449,7 @@ class MsgResultEntry(QtWidgets.QGroupBox):
         # check if task solvable. (non-solvable prob returns only one line)
         if len(msg) == 1:
             mainLayout = QtWidgets.QVBoxLayout()
-            l.QtWidgets.QLabel(msg[0])
+            l = QtWidgets.QLabel(msg[0])
             l.setWordWrap(True)
             l.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
             mainLayout.addWidget(l)

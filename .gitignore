@@ -1,5 +1,6 @@
 # yys special
 data/yyspreset.dat
+temp*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
