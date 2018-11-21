@@ -21,7 +21,7 @@ def wrap_all_together(task_entries, ban_opts):
     Returns:
         full_res -- {task_star: (status, solution, total_s)}
             status -- pulp status: 'Optimal', 'Unbound', 'Unsolvable'
-            solution -- {'level_name': level_num}
+            solution -- [([<'level_name'>, ...], <level_num, float>), ...]
             total_s -- total stamina, int
     '''
 
@@ -47,7 +47,7 @@ def solve_single_prob(task_creep_list, task_creep_num_list, ban_opts):
         ban_opts -- {'opt-name': <value, bool/int>}
     Returns:
         status -- pulp status: 'Optimal', 'Unbound', 'Unsolvable'
-        solution -- {<'level_name'>: <level_num, float>}
+        solution -- [([<'level_name'>, ...], <level_num, float>), ...]
         total_s -- total stamina, float
     '''
 
@@ -57,34 +57,7 @@ def solve_single_prob(task_creep_list, task_creep_num_list, ban_opts):
     sub_c, level_id = gen_sub_constraint(creep_id, banned_level_id)
 
     # solve the prob
-    status, solution, total_s = lp_opt(sub_c, task_creep_num_list, level_id, isTeam=ban_opts['isTeam'])
-
-    # check if boos level is in the result.
-    # if so & isBoss = True, regenerate the level_id & sub_c
-    if ban_opts['isBoss']:
-        boss_level_required_id = []
-        for x in solution.keys():
-            id = yysdata.LEVEL_NAME_LIST.index(x)
-            if id in ALL_BOSS_LEVEL_DICT:
-                boss_level_required_id.append(id)
-                for i in ALL_BOSS_LEVEL_DICT[id]:
-                    boss_level_required_id.append(i)
-            else:
-                pass
-
-        if boss_level_required_id:
-            # all level ids in this_boss_level_ids must be included
-            # in the sub_c and constraint. their level_num must >= 1
-            recalc_level_id = list(set(level_id + boss_level_required_id))
-            # regenerate sub_c using numpy's advace indexing
-            _r = np.array(creep_id, dtype=np.intp)
-            recalc_sub_c = COMPLETE_C[_r[:, np.newaxis], recalc_level_id]
-            # resolve the prob with additional constraint
-            status, solution, total_s = lp_opt(recalc_sub_c, task_creep_list, recalc_level_id, add_constraint=boss_level_required_id)
-        else:
-            pass
-    else:
-        pass
+    status, solution, total_s = lp_opt(sub_c, task_creep_num_list, level_id, isTeam=ban_opts['isTeam'], isBoss=ban_opts['isBoss'])
 
     return status, solution, total_s
 
@@ -251,14 +224,14 @@ def gen_stamina(chosen_level_list, isTeam=False):
     return stamina
 
 
-def lp_opt(c, creep_num, level_id, isTeam=False, add_constraint=None):
+def lp_opt(c, creep_num, level_id, isTeam=False, isBoss=False):
     ''' 整数线性优化
     Arguments:
         c -- 约束矩阵 c[i][j]
         creep_num -- 约束条件：怪物数量列表
         level_id -- 自变量：关卡 id
         isTeam -- bool, 是否组队
-        add_constraint -- additional constraint from boss level
+        isBoss -- bool, 是否攻打首领
     Returns:
         prob.status -- pulp status
         solution -- [([<'level_name'>, ...], <level_num, float>), ...]
@@ -271,16 +244,7 @@ def lp_opt(c, creep_num, level_id, isTeam=False, add_constraint=None):
 
     # append stamina to the first row of constraint matrix c
     c = np.vstack((stamina, c))
-
-    if add_constraint:
-        x = []
-        for i in level_id:
-            if i in add_constraint:
-                x.append(pulp.LpVariable('x{:d}'.format(i), lowBound=1, cat=pulp.LpInteger))
-            else:
-                x.append(pulp.LpVariable('x{:d}'.format(i), lowBound=0, cat=pulp.LpInteger))
-    else:
-        x = [pulp.LpVariable('x{:d}'.format(i), lowBound=0, cat=pulp.LpInteger) for i in level_id]
+    x = [pulp.LpVariable('x{:d}'.format(i), lowBound=0, cat=pulp.LpInteger) for i in level_id]
 
     obj = pulp.LpAffineExpression([(x[j], c[0, j]) for j in range(len(level_id))])
     # objective funciton
@@ -290,8 +254,8 @@ def lp_opt(c, creep_num, level_id, isTeam=False, add_constraint=None):
         _t = pulp.LpAffineExpression([(x[j], c[i+1, j]) for j in range(len(level_id))])
         prob += pulp.lpSum(_t) >= creep_num[i]
     prob.solve()
-
     solution = []
+
     # and this is ABSOLUTELY stupid: believe it or not,
     # the index [i] pulp returns is not equal to the
     # index j of x[level_id] in level_id!
@@ -306,6 +270,63 @@ def lp_opt(c, creep_num, level_id, isTeam=False, add_constraint=None):
             x0[j] = x.varValue
         else:
             pass
+    # remember, j is the col index in c[i][j] & level_id
+    # level_id[j] is the level index in the complete LEVEL_NAME_LIST
+
+    # check if boos level is in the result.
+    # if so & isBoss = True, redo the optimization with extra constraints
+    # 逻辑是，对 boss level, 先调取与其关联的其他层数 id
+    # 随后将这些层数分为两类：类 1 已在 sub_c 中，类 2 不在 sub_c 中
+    # 对类 1，lowerBound 改为 >= boss level 攻打次数
+    # 对类 2, 只计算其个数，并将相应体力值加到 boss level 的体力值上
+    if isBoss:
+        x0_boss = {}        # {boss_id: ([type_1_j], [type_2])}
+        for j in np.nonzero(x0)[0].tolist():
+            # search boss level in all nonzero value levels
+            if level_id[j] in ALL_BOSS_LEVEL_DICT:
+                # found boss level
+                type_1_j = []
+                type_2 = []
+                for id in ALL_BOSS_LEVEL_DICT[level_id[j]]:
+                    # get linked creep levels
+                    if id in level_id:  # if it is in sub_c
+                        type_1_j.append(level_id.index(id))
+                    else:
+                        type_2.append(id)
+                x0_boss[j] = (type_1_j, type_2)
+            else:
+                pass
+        # resolve the problem
+        prob = pulp.LpProblem(name = 'yys_opt', sense=pulp.LpMinimize)
+        # recreate stamina
+        for boss_j in x0_boss:
+            c[0, boss_j] = 3 * len(x0_boss[boss_j][1]) + 3
+        # recreate variable & constraint
+        x = [pulp.LpVariable('x{:d}'.format(i), lowBound=0, cat=pulp.LpInteger) for i in level_id]
+        obj = pulp.LpAffineExpression([(x[j], c[0, j]) for j in range(len(level_id))])
+        # objective funciton
+        prob += pulp.lpSum(obj)
+        # adding constraints
+        for i in range(len(creep_num)):
+            _t = pulp.LpAffineExpression([(x[j], c[i+1, j]) for j in range(len(level_id))])
+            prob += pulp.lpSum(_t) >= creep_num[i]
+        print('x=', x)
+        print('x0_boss=', x0_boss)
+        for boss_j in x0_boss:
+            for j in x0_boss[boss_j][0]:
+                prob += x[j] >= x[boss_j]
+        prob.solve()
+
+        x0 = np.zeros(len(level_id))
+        for x in prob.variables():
+            if x.varValue:  # if non-zero
+                j = level_id.index(int(x.name[1:]))
+                x0[j] = x.varValue
+            else:
+                pass
+    else:
+        pass
+
 
     # find identical levels and return all of them in the result
     identical_cols = {}
@@ -324,6 +345,7 @@ def lp_opt(c, creep_num, level_id, isTeam=False, add_constraint=None):
                           [yysdata.LEVEL_NAME_LIST[level_id[k]] for k in ks]
         else:
             level_names = [yysdata.LEVEL_NAME_LIST[level_id[j]]]
+        level_names.sort()
         solution.append((level_names, x0[j]))
     total_s = np.dot(x0, c[0, :].transpose())
 
@@ -331,6 +353,7 @@ def lp_opt(c, creep_num, level_id, isTeam=False, add_constraint=None):
 
 
 def load_data():
+    print('load data')
     with open('data/d.pkl', 'rb') as f:
         global COMPLETE_C
         COMPLETE_C = pickle.load(f)

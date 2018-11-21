@@ -467,7 +467,7 @@ class MsgResultEntry(QtWidgets.QGroupBox):
             for i in range(len(msg)-1):
                 _p = QtWidgets.QLabel(msg[i])
                 _p.setWordWrap(False)
-                _p.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+                _p.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft)
                 _q = QtWidgets.QLabel(' × {:.0f} 次'.format(n[i]))
                 _q.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight)
                 _q.setMaximumWidth(200)

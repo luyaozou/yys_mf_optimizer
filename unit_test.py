@@ -10,38 +10,38 @@ import win_unicode_console
 win_unicode_console.enable()
 
 
-class TestConstraintGen(unittest.TestCase):
-    ''' test constraint matrix generator
-        测试约束矩阵生成器
-    '''
-
-    def test(self):
-
-        test_creep_list = ['天邪鬼赤', '独眼小僧', '椒图', '灯笼鬼']
-
-        test_level_list = ['御魂第1层',
-                            '探索副本第1章：天邪鬼绿1',
-                            '探索副本第1章：天邪鬼绿2',
-                            '探索副本第1章：首领',
-                            '河畔童谣第8层']
-
-        test_creep_in_level_dict = {
-            '御魂第1层': [('天邪鬼赤', 2), ('独眼小僧', 1)],
-            '探索副本第1章：天邪鬼绿1': [('天邪鬼赤', 2)],
-            '探索副本第1章：天邪鬼绿2': [('天邪鬼绿', 1), ('灯笼鬼', 2)],
-            '探索副本第1章：首领': [('灯笼鬼', 3)],
-            '河畔童谣第8层': [('椒图', 2)]
-        }
-
-        test_out = np.array([[2, 2, 0, 0, 0],
-                             [1, 0, 0, 0, 0],
-                             [0, 0, 0, 0, 2],
-                             [0, 0, 2, 3, 0]
-                            ])
-
-        print('\n test constraint matrix function')
-
-        self.assertEqual(True, np.array_equal(test_out, yysdata.gen_complete_constraint(test_creep_list, test_level_list, test_creep_in_level_dict)))
+# class TestConstraintGen(unittest.TestCase):
+#     ''' test constraint matrix generator
+#         测试约束矩阵生成器
+#     '''
+#
+#     def test(self):
+#
+#         test_creep_list = ['天邪鬼赤', '独眼小僧', '椒图', '灯笼鬼']
+#
+#         test_level_list = ['御魂第1层',
+#                             '探索副本第1章：天邪鬼绿1',
+#                             '探索副本第1章：天邪鬼绿2',
+#                             '探索副本第1章：首领',
+#                             '河畔童谣第8层']
+#
+#         test_creep_in_level_dict = {
+#             '御魂第1层': [('天邪鬼赤', 2), ('独眼小僧', 1)],
+#             '探索副本第1章：天邪鬼绿1': [('天邪鬼赤', 2)],
+#             '探索副本第1章：天邪鬼绿2': [('天邪鬼绿', 1), ('灯笼鬼', 2)],
+#             '探索副本第1章：首领': [('灯笼鬼', 3)],
+#             '河畔童谣第8层': [('椒图', 2)]
+#         }
+#
+#         test_out = np.array([[2, 2, 0, 0, 0],
+#                              [1, 0, 0, 0, 0],
+#                              [0, 0, 0, 0, 2],
+#                              [0, 0, 2, 3, 0]
+#                             ])
+#
+#         print('\n test constraint matrix function')
+#
+#         self.assertEqual(True, np.array_equal(test_out, dump_data._gen_complete_constraint(test_creep_list, test_level_list, test_creep_in_level_dict)))
 
 
 
@@ -79,15 +79,40 @@ class TestLevelBan(unittest.TestCase):
 
     def test(self):
 
-        test_in_1 = [[1], {'yhLevel':(0, 0), 'mwLevel':(0, 0), 'isTeam': True}]
-        test_in_2 = [[1], {'yhLevel':(2, 7), 'mwLevel':(1, 10), 'isTeam': True}]
+        test_in = [{'yhLevel': (0, 0), 'mwLevel': (0, 0), 'isTeam': True, 'isBoss': True},
+                   {'yhLevel': (2, 7), 'mwLevel': (1, 10), 'isTeam': True, 'isBoss': True}]
 
-        test_out_1 = [1] + list(range(188, 348))
-        test_out_2 = [1, 188, 195, 196, 197]
+        test_out = [list(range(188, 348)), [188, 195, 196, 197]]
 
         print('\n test level id ban')
-        self.assertEqual(test_out_1, yyslib.ban_level(test_in_1[0], test_in_1[1]))
-        self.assertEqual(test_out_2, yyslib.ban_level(test_in_2[0], test_in_2[1]))
+        for i in range(len(test_in)):
+            self.assertEqual(test_out[i], yyslib.ban_level(test_in[i]))
+
+
+class TestOpt(unittest.TestCase):
+    ''' 测试策略优化器结果 '''
+
+    def test(self):
+
+        print('\n test opt result')
+        print('-'*5 + ' Case 1 ' + '-'*5)
+
+        test_in = (['天邪鬼青'], [4], {'yhLevel': (0, 0), 'mwLevel': (0, 0),
+                                 'isTeam': False, 'isBoss': False})
+        test_out = [1, (['探索副本第10章：丑时之女1', '探索副本第10章：丑时之女2'], 2), 6]
+        res = yyslib.solve_single_prob(*test_in)
+        for i in range(3):
+            self.assertEqual(test_out[i], res[i])
+
+        print('-'*5 + ' Case 2 ' + '-'*5)
+        test_in = (['天邪鬼青'], [4], {'yhLevel': (0, 0), 'mwLevel': (1, 6),
+                                 'isTeam': False, 'isBoss': False})
+        test_out = [1, (['妖刀之秘籍（妖刀姬）第1层', '妖刀之秘籍（妖刀姬）第2层', '妖刀之秘籍（妖刀姬）第3层'], 1), 3]
+        res = yyslib.solve_single_prob(*test_in)
+        for i in range(3):
+            self.assertEqual(test_out[i], res[i])
+
+        print('-'*5 + ' Case 3 ' + '-'*5)
 
 
 if __name__ == '__main__':
