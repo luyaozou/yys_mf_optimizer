@@ -21,7 +21,7 @@ class TaskEditor(QtWidgets.QGroupBox):
         self.setCheckable(False)
 
 
-        self.taskRowList = []
+        self.taskRowDict = {}   # {id: taskRowWidget}
         newBtn = QtWidgets.QPushButton('新增任务')
         # the button group stores all delete buttons so that
         # I can track them down
@@ -62,9 +62,12 @@ class TaskEditor(QtWidgets.QGroupBox):
         '''
 
         # get current task number
-        n = len(self.taskRowList)
+        if self.taskRowDict:
+            n = max(self.taskRowDict.keys()) + 1
+        else:
+            n = 0
         task = TaskRow(self)
-        self.taskRowList.append(task)
+        self.taskRowDict[n] = task
         self.entryLayout.addWidget(task.delBtn, n+1, 0)
         self.entryLayout.addWidget(task.editBtn, n+1, 1)
         self.entryLayout.addWidget(task.creepEdit, n+1, 2)
@@ -78,9 +81,9 @@ class TaskEditor(QtWidgets.QGroupBox):
         移除列表中的任务
         '''
 
-        task = self.taskRowList[btn_id]
-        self.taskRowList.remove(task)
+        task = self.taskRowDict[btn_id]
         self.delBtnGroup.removeButton(task.delBtn)
+        del self.taskRowDict[btn_id]
         task.delRow()
 
     def showTasks(self):
@@ -89,7 +92,7 @@ class TaskEditor(QtWidgets.QGroupBox):
         '''
 
         a_list = []
-        for task in self.taskRowList:
+        for id, task in self.taskRowDict.items():
             a_list.append(task.getInput())
         return a_list
 

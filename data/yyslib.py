@@ -353,7 +353,6 @@ def lp_opt(c, creep_num, level_id, isTeam=False, isBoss=False):
 
 
 def load_data():
-    print('load data')
     with open('data/d.pkl', 'rb') as f:
         global COMPLETE_C
         COMPLETE_C = pickle.load(f)

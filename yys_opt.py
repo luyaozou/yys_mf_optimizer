@@ -83,7 +83,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     msg = Panel.MsgWarning(self, '参数错误', '任务参数存在空缺或错误，请补全参数或移除多余任务')
                     msg.exec_()
                     return False
-                return True
+            return True
         else:
             msg = Panel.MsgWarning(self, '缺少任务', '请输入至少一个任务')
             msg.exec_()
