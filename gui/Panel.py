@@ -6,7 +6,7 @@ Window panels
 '''
 
 from PyQt5 import QtWidgets, QtCore, QtGui
-from data import yysdata
+from data import yysdata, yyslib
 from os import path
 
 class TaskEditor(QtWidgets.QGroupBox):
@@ -433,17 +433,29 @@ class MsgResult(QtWidgets.QDialog):
                 title = '完成 ≥{:d} 星任务的推荐策略'.format(key)
                 msg = []
                 n = []
+                isBoss = []
                 for item in solution:
                     # ([<'level_name'>, ], <value, float>)
+                    _b = False
                     names, value = item
                     names.reverse()
-                    s = '    ' + names.pop()
+                    s = names.pop()
+                    if s in yysdata.BOSS_LEVEL_LINK.keys():
+                        _b = True
+                    else:
+                        pass
                     while names:
-                        s += '\n或 {:s}'.format(names.pop())
+                        _t = names.pop()
+                        if _t in yysdata.BOSS_LEVEL_LINK.keys():
+                            _b = True
+                        else:
+                            pass
+                        s += '\n' + _t
                     msg.append(s)
                     n.append(value)
+                    isBoss.append(_b)
                 msg.append('总消耗体力：{:.0f}'.format(total_s))
-                self.msgLayout.addWidget(MsgResultEntry(title, msg, n))
+                self.msgLayout.addWidget(MsgResultEntry(title, msg, n, isBoss))
             else:
                 pass
 
@@ -451,7 +463,7 @@ class MsgResult(QtWidgets.QDialog):
 class MsgResultEntry(QtWidgets.QGroupBox):
     ''' 单个结果条目 '''
 
-    def __init__(self, title, msg, n=[]):
+    def __init__(self, title, msg, n=[], isBoss=False):
         QtWidgets.QWidget.__init__(self)
 
         self.setTitle(title)
@@ -471,9 +483,13 @@ class MsgResultEntry(QtWidgets.QGroupBox):
                 _p = QtWidgets.QLabel(msg[i])
                 _p.setWordWrap(False)
                 _p.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft)
-                _q = QtWidgets.QLabel(' × {:.0f} 次'.format(n[i]))
+                if isBoss[i]:
+                    _q = QtWidgets.QLabel('所有关卡 × {:.0f} 次'.format(n[i]))
+                    _q.setStyleSheet('color: #D63333')
+                else:
+                    _q = QtWidgets.QLabel('任意关卡 × {:.0f} 次'.format(n[i]))
                 _q.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight)
-                _q.setMaximumWidth(200)
+                _q.setMaximumWidth(300)
                 _c = Counter()
                 mainLayout.addWidget(_p, i, 0)
                 mainLayout.addWidget(_q, i, 1)

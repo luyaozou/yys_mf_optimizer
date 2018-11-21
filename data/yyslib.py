@@ -279,8 +279,8 @@ def lp_opt(c, creep_num, level_id, isTeam=False, isBoss=False):
     # 随后将这些层数分为两类：类 1 已在 sub_c 中，类 2 不在 sub_c 中
     # 对类 1，lowerBound 改为 >= boss level 攻打次数
     # 对类 2, 只计算其个数，并将相应体力值加到 boss level 的体力值上
+    x0_boss = {}        # {boss_id: ([type_1_j], [type_2])}
     if isBoss:
-        x0_boss = {}        # {boss_id: ([type_1_j], [type_2])}
         for j in np.nonzero(x0)[0].tolist():
             # search boss level in all nonzero value levels
             if level_id[j] in ALL_BOSS_LEVEL_DICT:
@@ -310,8 +310,6 @@ def lp_opt(c, creep_num, level_id, isTeam=False, isBoss=False):
         for i in range(len(creep_num)):
             _t = pulp.LpAffineExpression([(x[j], c[i+1, j]) for j in range(len(level_id))])
             prob += pulp.lpSum(_t) >= creep_num[i]
-        print('x=', x)
-        print('x0_boss=', x0_boss)
         for boss_j in x0_boss:
             for j in x0_boss[boss_j][0]:
                 prob += x[j] >= x[boss_j]
@@ -327,18 +325,40 @@ def lp_opt(c, creep_num, level_id, isTeam=False, isBoss=False):
     else:
         pass
 
-
     # find identical levels and return all of them in the result
+    # note that here no other boss levels should be included
     identical_cols = {}
-    for j in np.nonzero(x0)[0].tolist():    # get col id of nonzero x
-        cj = c[:, j]
-        identical_cols[j] = []
-        for k in range(len(x0)):    # find identical cols
-            ck = c[:, k]
-            if k != j and np.array_equal(cj, ck):
-                identical_cols[j].append(k)
+    # 如果 j 出现在 x0_boss 中，把同一章的相关列 id 放在一起，
+    # 且不再添加其他章节的全同列
+    if x0_boss:
+        for boss_j in x0_boss.keys():
+            boss_j_value = x0[boss_j]
+            if boss_j_value:
+                ks = x0_boss[boss_j][0]
+                identical_cols[boss_j] = ks
+                # 把攻打首领的次数也从同一章相关列的值中去掉
+                # 同时把对应体力值加到首领列上
+                for k in ks:
+                    x0[k] = x0[k] - boss_j_value
+                c[0, boss_j] = c[0, boss_j] + boss_j_value * len(ks) * 3
             else:
                 pass
+    else:
+        pass
+
+    # get col id of nonzero non-boss level
+    for j in np.nonzero(x0)[0].tolist():
+        if j not in x0_boss.keys():
+            cj = c[:, j]
+            identical_cols[j] = []
+            for k in range(len(x0)):    # find identical cols
+                ck = c[:, k]
+                if k != j and np.array_equal(cj, ck) and level_id[k] not in ALL_BOSS_LEVEL_DICT:
+                    identical_cols[j].append(k)
+                else:
+                    pass
+        else:
+            pass
     for j, ks in identical_cols.items():
         if ks:
             level_names = [yysdata.LEVEL_NAME_LIST[level_id[j]]] + \
