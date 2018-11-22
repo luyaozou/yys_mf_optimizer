@@ -270,58 +270,65 @@ def lp_opt(c, creep_num, level_id, isTeam=False, isBoss=False):
             x0[j] = x.varValue
         else:
             pass
+
     # remember, j is the col index in c[i][j] & level_id
     # level_id[j] is the level index in the complete LEVEL_NAME_LIST
 
     # check if boos level is in the result.
     # if so & isBoss = True, redo the optimization with extra constraints
+    # until the solution does change any more.
     # 逻辑是，对 boss level, 先调取与其关联的其他层数 id
     # 随后将这些层数分为两类：类 1 已在 sub_c 中，类 2 不在 sub_c 中
     # 对类 1，lowerBound 改为 >= boss level 攻打次数
     # 对类 2, 只计算其个数，并将相应体力值加到 boss level 的体力值上
     x0_boss = {}        # {boss_id: ([type_1_j], [type_2])}
     if isBoss:
-        for j in np.nonzero(x0)[0].tolist():
-            # search boss level in all nonzero value levels
-            if level_id[j] in ALL_BOSS_LEVEL_DICT:
-                # found boss level
-                type_1_j = []
-                type_2 = []
-                for id in ALL_BOSS_LEVEL_DICT[level_id[j]]:
-                    # get linked creep levels
-                    if id in level_id:  # if it is in sub_c
-                        type_1_j.append(level_id.index(id))
-                    else:
-                        type_2.append(id)
-                x0_boss[j] = (type_1_j, type_2)
-            else:
-                pass
-        # resolve the problem
-        prob = pulp.LpProblem(name = 'yys_opt', sense=pulp.LpMinimize)
-        # recreate stamina
-        for boss_j in x0_boss:
-            c[0, boss_j] = 3 * len(x0_boss[boss_j][1]) + 3
-        # recreate variable & constraint
-        x = [pulp.LpVariable('x{:d}'.format(i), lowBound=0, cat=pulp.LpInteger) for i in level_id]
-        obj = pulp.LpAffineExpression([(x[j], c[0, j]) for j in range(len(level_id))])
-        # objective funciton
-        prob += pulp.lpSum(obj)
-        # adding constraints
-        for i in range(len(creep_num)):
-            _t = pulp.LpAffineExpression([(x[j], c[i+1, j]) for j in range(len(level_id))])
-            prob += pulp.lpSum(_t) >= creep_num[i]
-        for boss_j in x0_boss:
-            for j in x0_boss[boss_j][0]:
-                prob += x[j] >= x[boss_j]
-        prob.solve()
+        old_x0 = np.zeros(0)    # this stores the previous solution
+        # if two iterations are not equal, do another iteration
+        while not np.array_equal(x0, old_x0):
+            for j in np.nonzero(x0)[0].tolist():
+                # search boss level in all nonzero value levels
+                if level_id[j] in ALL_BOSS_LEVEL_DICT:
+                    # found boss level
+                    type_1_j = []
+                    type_2 = []
+                    for id in ALL_BOSS_LEVEL_DICT[level_id[j]]:
+                        # get linked creep levels
+                        if id in level_id:  # if it is in sub_c
+                            type_1_j.append(level_id.index(id))
+                        else:
+                            type_2.append(id)
+                    x0_boss[j] = (type_1_j, type_2)
+                else:
+                    pass
+            # resolve the problem
+            prob = pulp.LpProblem(name = 'yys_opt', sense=pulp.LpMinimize)
+            # recreate stamina
+            for boss_j in x0_boss:
+                c[0, boss_j] = 3 * len(x0_boss[boss_j][1]) + 3
+            # recreate variable & constraint
+            x = [pulp.LpVariable('x{:d}'.format(i), lowBound=0, cat=pulp.LpInteger) for i in level_id]
+            obj = pulp.LpAffineExpression([(x[j], c[0, j]) for j in range(len(level_id))])
+            # objective funciton
+            prob += pulp.lpSum(obj)
+            # adding constraints
+            for i in range(len(creep_num)):
+                _t = pulp.LpAffineExpression([(x[j], c[i+1, j]) for j in range(len(level_id))])
+                prob += pulp.lpSum(_t) >= creep_num[i]
+            for boss_j in x0_boss:
+                for j in x0_boss[boss_j][0]:
+                    prob += x[j] >= x[boss_j]
+            prob.solve()
 
-        x0 = np.zeros(len(level_id))
-        for x in prob.variables():
-            if x.varValue:  # if non-zero
-                j = level_id.index(int(x.name[1:]))
-                x0[j] = x.varValue
-            else:
-                pass
+            # store x0 in previous solution
+            old_x0 = np.copy(x0)
+            x0 = np.zeros(len(level_id))
+            for x in prob.variables():
+                if x.varValue:  # if non-zero
+                    j = level_id.index(int(x.name[1:]))
+                    x0[j] = x.varValue
+                else:
+                    pass
     else:
         pass
 
